@@ -13,12 +13,40 @@
 <link rel="icon" href="apple-touch-icon.png">
 <style>
 html,body{margin:0;height:100%;background:#0e0d1a;overflow:hidden}
-iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#0e0d1a}
+/* the page itself can never scroll or shift, so taps always land where they look */
+body{position:fixed;inset:0}
+iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:0;background:#0e0d1a}
 #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#a855f7;font:700 64px -apple-system,system-ui,sans-serif}
 </style>
 </head>
 <body>
 <div id="load">B</div>
-<iframe src="https://script.google.com/macros/s/AKfycbzxJehm0y_Q0f6StX9HQGLg6dWVYkElLBzoEvhO_oU4XZvKuI7I0GY01J8rVJBvQXKqew/exec" allow="clipboard-write" onload="document.getElementById('load').style.display='none'"></iframe>
+<iframe id="app" src="https://script.google.com/macros/s/AKfycbzxJehm0y_Q0f6StX9HQGLg6dWVYkElLBzoEvhO_oU4XZvKuI7I0GY01J8rVJBvQXKqew/exec" allow="clipboard-write" onload="document.getElementById('load').style.display='none'"></iframe>
+<script>
+/* After the phone is rotated and turned back, iPhone can leave the app's frame drawn in one place
+   but answering taps somewhere else (menu bar, lock button). This re-fits the frame to the screen
+   and makes every layer inside it lay itself out again, so taps line up with what you see. */
+(function () {
+  var f = document.getElementById('app'), t1 = 0, t2 = 0;
+  function fit() {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0; document.body.scrollTop = 0;
+    var w = window.innerWidth, h = window.innerHeight;
+    f.style.width = w + 'px'; f.style.height = (h - 1) + 'px';      /* a real size change wakes up the pages inside */
+    requestAnimationFrame(function () {
+      f.style.height = h + 'px';
+      f.style.transform = 'translateZ(0)';
+      requestAnimationFrame(function () { f.style.transform = ''; });
+    });
+  }
+  function soon() { clearTimeout(t1); clearTimeout(t2); t1 = setTimeout(fit, 300); t2 = setTimeout(fit, 900); }
+  window.addEventListener('orientationchange', soon);
+  window.addEventListener('resize', soon);
+  if (window.visualViewport) visualViewport.addEventListener('resize', soon);
+  window.addEventListener('pageshow', soon);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) soon(); });
+  fit();
+})();
+</script>
 </body>
 </html>
