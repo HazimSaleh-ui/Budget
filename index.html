@@ -128,14 +128,31 @@ iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:0;background:#0
   window.addEventListener('message', function (e) {
     var m = e.data; if (!m || typeof m !== 'object' || !m.bt || !APP_ORIGIN.test(e.origin)) return;
     appWin = e.source; appOrigin = e.origin;
-    if (m.bt === 'faceQuery') supported().then(function (s) { send({ bt: 'faceInfo', supported: !!s, enrolled: enrolled() }); });
-    else if (m.bt === 'pin') { onPin = true; showBtn(); if (m.auto && !autoTried && enrolled()) { autoTried = true; unlock(); } }
-    else if (m.bt === 'app') { onPin = false; autoTried = false; showBtn(); }
+    if (m.bt === 'hi') send({ bt: 'hello' });
+    else if (m.bt === 'faceQuery') supported().then(function (s) { send({ bt: 'faceInfo', supported: !!s, enrolled: enrolled() }); });
+    else if (m.bt === 'pin') {
+      onPin = true; send({ bt: 'hello' }); showBtn();
+      var r = resume();
+      if (m.auto && r && !resumeSent) { resumeSent = true; send({ bt: 'resumeKey', key: r.key }); return; }
+      if (m.auto && !autoTried && enrolled()) { autoTried = true; unlock(); }
+    }
+    else if (m.bt === 'app') { onPin = false; autoTried = false; resumeSent = false; showBtn(); }
+    else if (m.bt === 'resume' && /^[0-9a-f]{64}$/.test(m.key || '') && m.exp > Date.now()) ls('bt_resume', JSON.stringify({ key: m.key, exp: m.exp }));
+    else if (m.bt === 'resumeForget' || m.bt === 'lock') { ls('bt_resume', null); resumeSent = false; }
     else if (m.bt === 'faceSetup' && /^[0-9a-f]{64}$/.test(m.key || '')) { pendingKey = m.key; sheet.classList.add('on'); showBtn(); }
     else if (m.bt === 'faceForget') { ls('bt_face', null); ls('bt_face_id', null); showBtn(); }
   });
   /* coming back to the app later: offer Face ID again automatically */
   document.addEventListener('visibilitychange', function () { if (document.hidden) autoTried = false; });
+
+  /* Stay unlocked for up to 24 hours, unless the app was away (closed or in the background) for more than 15 minutes */
+  var AWAY_MS = 15 * 60000, resumeSent = false;
+  function resume() { try { var r = JSON.parse(ls('bt_resume') || 'null'); return r && r.exp > Date.now() && /^[0-9a-f]{64}$/.test(r.key) ? r : null; } catch (e) { return null; } }
+  function awayTooLong() { var h = +(ls('bt_hid') || 0); ls('bt_hid', null); if (h && Date.now() - h > AWAY_MS) { ls('bt_resume', null); return true; } return false; }
+  function hid() { ls('bt_hid', String(Date.now())); }
+  document.addEventListener('visibilitychange', function () { if (document.hidden) hid(); else if (awayTooLong()) { resumeSent = false; send({ bt: 'awayLock' }); } });
+  window.addEventListener('pagehide', hid);
+  awayTooLong();                                   /* fresh open of the app */
 })();
 </script>
 </body>
