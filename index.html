@@ -16,12 +16,16 @@ html,body{margin:0;height:100%;background:#0e0d1a;overflow:hidden}
 /* the page itself can never scroll or shift, so taps always land where they look */
 body{position:fixed;inset:0}
 iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:0;background:#0e0d1a}
+/* a soft dark veil hides the half-drawn screen while the phone turns, then fades away */
+#veil{position:fixed;inset:0;background:#0e0d1a;opacity:0;pointer-events:none;transition:opacity .28s ease;z-index:2}
+#veil.on{opacity:1;transition:opacity .1s ease}
 #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#a855f7;font:700 64px -apple-system,system-ui,sans-serif}
 </style>
 </head>
 <body>
 <div id="load">B</div>
 <iframe id="app" src="https://script.google.com/macros/s/AKfycbzxJehm0y_Q0f6StX9HQGLg6dWVYkElLBzoEvhO_oU4XZvKuI7I0GY01J8rVJBvQXKqew/exec" allow="clipboard-write" onload="document.getElementById('load').style.display='none'"></iframe>
+<div id="veil"></div>
 <script>
 /* After the phone is rotated and turned back, iPhone can leave the app's frame drawn in one place
    but answering taps somewhere else (menu bar, lock button). This re-fits the frame to the screen
@@ -29,15 +33,23 @@ iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:0;background:#0
 (function () {
   /* The frame always fills the screen by itself (no fixed sizes), so it turns with the phone in one smooth move.
      Once the rotation has fully finished, one invisible 1-pixel nudge makes the pages inside re-align their taps. */
-  var f = document.getElementById('app'), t = 0;
+  var f = document.getElementById('app'), v = document.getElementById('veil'), t = 0, u = 0, lastW = window.innerWidth;
   function fit() {
     if (window.scrollY || document.body.scrollTop) { window.scrollTo(0, 0); document.body.scrollTop = 0; }
     f.style.height = 'calc(100% - 1px)';
     requestAnimationFrame(function () { requestAnimationFrame(function () { f.style.height = ''; }); });
   }
   function soon() { clearTimeout(t); t = setTimeout(fit, 450); }
-  window.addEventListener('orientationchange', soon);
-  window.addEventListener('resize', soon);
+  /* only a real turn (the width changes) shows the veil; it lifts once the app has redrawn */
+  function turning() {
+    if (window.innerWidth === lastW && !turning.force) return;
+    lastW = window.innerWidth; turning.force = false;
+    v.classList.add('on'); clearTimeout(u);
+    u = setTimeout(function () { v.classList.remove('on'); }, 650);
+    soon();
+  }
+  window.addEventListener('orientationchange', function () { turning.force = true; turning(); });
+  window.addEventListener('resize', function () { turning(); soon(); });
   if (window.visualViewport) visualViewport.addEventListener('resize', soon);
   window.addEventListener('pageshow', soon);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) soon(); });
