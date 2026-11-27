@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Budget</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Budget">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#0e0d1a">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="apple-touch-icon.png">
+<style>
+html,body{margin:0;height:100%;background:#0e0d1a;overflow:hidden}
+/* the page itself can never scroll or shift, so taps always land where they look */
+body{position:fixed;inset:0}
+iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:0;background:#0e0d1a}
+/* a soft dark veil hides the half-drawn screen while the phone turns, then fades away */
+#veil{position:fixed;inset:0;background:#0e0d1a;opacity:0;pointer-events:none;transition:opacity .28s ease;z-index:2}
+#veil.on{opacity:1;transition:opacity .1s ease}
+/* Face ID button over the PIN screen, and the one-time setup sheet */
+#fid{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:3;display:none;align-items:center;gap:9px;padding:12px 22px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.08);color:#fff;font:600 16px -apple-system,system-ui,sans-serif;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+#fid.on{display:flex}
+#fid svg{width:22px;height:22px}
+#fset{position:fixed;inset:0;z-index:4;display:none;align-items:flex-end;background:rgba(5,4,12,.55)}
+#fset.on{display:flex}
+#fset .sh{width:100%;max-width:560px;margin:0 auto;background:#1b1830;color:#f4f2ff;border-radius:26px 26px 0 0;padding:26px 20px calc(22px + env(safe-area-inset-bottom));font:15px/1.45 -apple-system,system-ui,sans-serif;text-align:center}
+#fset .sh svg{width:44px;height:44px;color:#b69cff}
+#fset h2{margin:10px 0 6px;font-size:21px}
+#fset p{margin:0 0 18px;color:#a29cc0}
+#fset button{display:block;width:100%;border:0;border-radius:16px;padding:14px;font:700 16px -apple-system,system-ui,sans-serif;margin-top:10px}
+#fset .go{background:linear-gradient(90deg,#7c5cff,#c050e0);color:#fff}
+#fset .no{background:#2b2745;color:#f4f2ff}
+#load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#a855f7;font:700 64px -apple-system,system-ui,sans-serif}
+</style>
+</head>
+<body>
+<div id="load">B</div>
+<iframe id="app" allow="clipboard-write" onload="if(this.src)document.getElementById('load').style.display='none'"></iframe>
+<script>
+/* This launcher opens any copy of the Budget app: the copy's deployment ID comes after ?id= in the address
+   (and is remembered on this phone), so one file serves everyone. */
+(function () {
+  var ok = /^AKfyc[A-Za-z0-9_-]{20,120}$/, id = (location.search.match(/[?&]id=([^&#]+)/) || [])[1] || '';
+  try { if (ok.test(id)) localStorage.setItem('bt_app_id', id); else id = localStorage.getItem('bt_app_id') || ''; } catch (e) {}
+  if (ok.test(id)) document.getElementById('app').src = 'https://script.google.com/macros/s/' + id + '/exec';
+  else { var l = document.getElementById('load'); l.style.cssText += ';font-size:17px;font-weight:600;padding:30px;text-align:center;color:#c9c2ee'; l.textContent = 'Open this page using the full link you were sent (it ends with ?id=…).'; }
+})();
+</script>
+<div id="veil"></div>
+<button id="fid" type="button" aria-label="Unlock with Face ID"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9 9.5v1M15 9.5v1M12 9.5v3.5h-1M9.5 15.5c1.4 1.1 3.6 1.1 5 0"/></svg>Face ID</button>
+<div id="fset"><div class="sh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9 9.5v1M15 9.5v1M12 9.5v3.5h-1M9.5 15.5c1.4 1.1 3.6 1.1 5 0"/></svg><h2>Turn on Face ID</h2><p>Unlock Budget with Face ID instead of typing your PIN. Your PIN still works.</p><button class="go" type="button">Continue</button><button class="no" type="button">Not now</button></div></div>
+<script>
+/* After the phone is rotated and turned back, iPhone can leave the app's frame drawn in one place
+   but answering taps somewhere else (menu bar, lock button). This re-fits the frame to the screen
+   and makes every layer inside it lay itself out again, so taps line up with what you see. */
+(function () {
+  /* The frame always fills the screen by itself (no fixed sizes), so it turns with the phone in one smooth move.
+     Once the rotation has fully finished, one invisible 1-pixel nudge makes the pages inside re-align their taps. */
+  var f = document.getElementById('app'), v = document.getElementById('veil'), t = 0, u = 0, lastW = window.innerWidth;
+  function fit() {
+    if (window.scrollY || document.body.scrollTop) { window.scrollTo(0, 0); document.body.scrollTop = 0; }
+    f.style.height = 'calc(100% - 1px)';
+    requestAnimationFrame(function () { requestAnimationFrame(function () { f.style.height = ''; }); });
+  }
+  function soon() { clearTimeout(t); t = setTimeout(fit, 450); }
+  /* only a real turn (the width changes) shows the veil; it lifts once the app has redrawn */
+  function turning() {
+    if (window.innerWidth === lastW && !turning.force) return;
+    lastW = window.innerWidth; turning.force = false;
+    v.classList.add('on'); clearTimeout(u);
+    u = setTimeout(function () { v.classList.remove('on'); }, 650);
+    soon();
+  }
+  window.addEventListener('orientationchange', function () { turning.force = true; turning(); });
+  window.addEventListener('resize', function () { turning(); soon(); });
+  if (window.visualViewport) visualViewport.addEventListener('resize', soon);
+  window.addEventListener('pageshow', soon);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) soon(); });
+})();
+
+/* Face ID. The app (inside Google's frames) and this page talk by messages. This page keeps a passkey for
+   this site; iOS only opens it after Face ID, and it holds the device key that unlocks the app. */
+(function () {
+  var APP_ORIGIN = /^https:\/\/[a-z0-9-]+\.googleusercontent\.com$/i;
+  var btn = document.getElementById('fid'), sheet = document.getElementById('fset');
+  var appWin = null, appOrigin = null, onPin = false, autoTried = false, pendingKey = null, busy = false;
+  function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
+  function enrolled() { return ls('bt_face') === '1'; }
+  function send(m) { if (appWin && appOrigin) try { appWin.postMessage(m, appOrigin); } catch (e) {} }
+  function rnd(n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
+  function hexToBytes(h) { var a = new Uint8Array(h.length / 2); for (var i = 0; i < a.length; i++) a[i] = parseInt(h.substr(i * 2, 2), 16); return a; }
+  function bytesToHex(b) { b = new Uint8Array(b); var s = ''; for (var i = 0; i < b.length; i++) s += (b[i] < 16 ? '0' : '') + b[i].toString(16); return s; }
+  function b64u(b) { b = new Uint8Array(b); var s = ''; for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function unb64u(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var t = atob(s), a = new Uint8Array(t.length); for (var i = 0; i < t.length; i++) a[i] = t.charCodeAt(i); return a; }
+  function supported() {
+    if (!window.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) return Promise.resolve(false);
+    return PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(function () { return false; });
+  }
+  function showBtn() { btn.classList.toggle('on', onPin && enrolled() && !sheet.classList.contains('on')); }
+
+  function unlock() {
+    if (busy || !enrolled()) return; busy = true;
+    var id = ls('bt_face_id');
+    navigator.credentials.get({ publicKey: {
+      challenge: rnd(32), rpId: location.hostname, userVerification: 'required', timeout: 60000,
+      allowCredentials: id ? [{ type: 'public-key', id: unb64u(id) }] : []
+    } }).then(function (c) {
+      busy = false;
+      var h = c && c.response && c.response.userHandle;
+      if (h && h.byteLength === 32) send({ bt: 'faceKey', key: bytesToHex(h) });
+    }).catch(function () { busy = false; showBtn(); });          /* cancelled or not allowed yet: the button stays */
+  }
+
+  function setup(ok) {
+    sheet.classList.remove('on'); var key = pendingKey; pendingKey = null;
+    if (!ok || !key) { send({ bt: 'faceSetDone', ok: false }); showBtn(); return; }
+    navigator.credentials.create({ publicKey: {
+      rp: { id: location.hostname, name: 'Budget' },
+      user: { id: hexToBytes(key), name: 'Budget', displayName: 'Budget' },
+      challenge: rnd(32),
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'required', requireResidentKey: true, userVerification: 'required' },
+      timeout: 60000, attestation: 'none'
+    } }).then(function (c) {
+      ls('bt_face', '1'); ls('bt_face_id', b64u(c.rawId));
+      send({ bt: 'faceSetDone', ok: true }); showBtn();
+    }).catch(function (e) {
+      send({ bt: 'faceSetDone', ok: false, msg: e && e.name === 'NotAllowedError' ? 'Face ID was not turned on' : 'Face ID could not be set up' });
+    });
+  }
+
+  btn.addEventListener('click', unlock);
+  sheet.querySelector('.go').addEventListener('click', function () { setup(true); });
+  sheet.querySelector('.no').addEventListener('click', function () { setup(false); });
+
+  window.addEventListener('message', function (e) {
+    var m = e.data; if (!m || typeof m !== 'object' || !m.bt || !APP_ORIGIN.test(e.origin)) return;
+    appWin = e.source; appOrigin = e.origin;
+    if (m.bt === 'hi') send({ bt: 'hello' });
+    else if (m.bt === 'faceQuery') supported().then(function (s) { send({ bt: 'faceInfo', supported: !!s, enrolled: enrolled() }); });
+    else if (m.bt === 'pin') {
+      onPin = true; send({ bt: 'hello' }); showBtn();
+      var r = resume();
+      if (m.auto && r && !resumeSent) { resumeSent = true; send({ bt: 'resumeKey', key: r.key }); return; }
+      if (m.auto && !autoTried && enrolled()) { autoTried = true; unlock(); }
+    }
+    else if (m.bt === 'app') { onPin = false; autoTried = false; resumeSent = false; showBtn(); }
+    else if (m.bt === 'resume' && /^[0-9a-f]{64}$/.test(m.key || '') && m.exp > Date.now()) ls('bt_resume', JSON.stringify({ key: m.key, exp: m.exp }));
+    else if (m.bt === 'resumeForget' || m.bt === 'lock') { ls('bt_resume', null); resumeSent = false; }
+    else if (m.bt === 'faceSetup' && /^[0-9a-f]{64}$/.test(m.key || '')) { pendingKey = m.key; sheet.classList.add('on'); showBtn(); }
+    else if (m.bt === 'faceForget') { ls('bt_face', null); ls('bt_face_id', null); showBtn(); }
+  });
+  /* coming back to the app later: offer Face ID again automatically */
+  document.addEventListener('visibilitychange', function () { if (document.hidden) autoTried = false; });
+
+  /* Stay unlocked for up to 24 hours, unless the app was away (closed or in the background) for more than 15 minutes */
+  var AWAY_MS = 15 * 60000, resumeSent = false;
+  function resume() { try { var r = JSON.parse(ls('bt_resume') || 'null'); return r && r.exp > Date.now() && /^[0-9a-f]{64}$/.test(r.key) ? r : null; } catch (e) { return null; } }
+  function awayTooLong() { var h = +(ls('bt_hid') || 0); ls('bt_hid', null); if (h && Date.now() - h > AWAY_MS) { ls('bt_resume', null); return true; } return false; }
+  function hid() { ls('bt_hid', String(Date.now())); }
+  document.addEventListener('visibilitychange', function () { if (document.hidden) hid(); else if (awayTooLong()) { resumeSent = false; send({ bt: 'awayLock' }); } });
+  window.addEventListener('pagehide', hid);
+  awayTooLong();                                   /* fresh open of the app */
+})();
+</script>
+</body>
+</html>
